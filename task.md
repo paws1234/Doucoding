@@ -28,7 +28,7 @@ header `Status:` moves `not started` → `in progress` → `complete`.
 
 | Phase | Tasks | Done / Total | Status |
 |---|---|---|---|
-| 0 — Scaffold: two surfaces from minute one | 14 | 0 / 14 | not started |
+| 0 — Scaffold: two surfaces from minute one | 14 | 0 / 14 | in progress |
 | 1 — Data layer | 12 | 0 / 12 | not started |
 | 2 — Core UI: flip + persist | 12 | 0 / 12 | not started |
 | 3 — Active typing mode | 6 | 0 / 6 | not started |
@@ -320,7 +320,7 @@ late".
 - **Evidence:** -
 - **Blocks:** `T-0.12`, `T-0.13`, `T-7.1`, `T-7.3`
 
-### [ ] T-0.11 — Add `.dockerignore` and extend `.gitignore`
+### [~] T-0.11 — Add `.dockerignore` and extend `.gitignore`
 
 - **Depends on:** `T-0.1`
 - **Size:** `S`
@@ -334,9 +334,18 @@ late".
      `*.jks`, so no signing material can ever be committed.
 - **Files / artifacts:** `.dockerignore`, `.gitignore`
 - **Done when:** both files list the entries and `.env.example` is explicitly not ignored.
-- **Verify:** `docker build -f docker/web.Dockerfile . 2>&1 | grep -c node_modules` shows the context
-  excludes it, and `git check-ignore -v .env android app-release.apk` reports a match for each.
-- **Evidence:** -
+- **Verify:** `git check-ignore -v .env android/app/build/outputs/apk/release/app-release.apk`
+  reports a match for each, and `docker build -f docker/web.Dockerfile . 2>&1 | grep -c node_modules`
+  shows the build context excludes `node_modules`.
+- **Evidence:** `[~]` — `.gitignore` created and pushed (commit `8e769a8`). Covers `node_modules/`,
+  `dist/`, `.expo/`, `*.log`, `.env` + `.env.*` with `!.env.example`, `android/`, `*.apk`,
+  `*.keystore`, `*.jks`, plus `.github/` at the user's request. Verified with `git check-ignore -q`:
+  IGNORED for `android/`, `android/app/build/outputs/apk/release/app-release.apk` and
+  `app-release.apk`. GitHub's contents API returns **404** for `.github` — proof it is unpublished,
+  not merely listed in a `.gitignore`. **Still missing: `.dockerignore`**, so the task stays open.
+- **Note:** `git check-ignore android` (bare name, no trailing slash) does **not** match an
+  `android/` directory-only pattern, because git cannot tell the path is a directory. Check a real
+  path *under* it instead — the tree itself is genuinely ignored.
 - **Blocks:** `T-0.13`
 
 ### [ ] T-0.12 — Add `.env.example` documenting `HOST_IP`
