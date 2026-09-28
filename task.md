@@ -28,8 +28,8 @@ header `Status:` moves `not started` → `in progress` → `complete`.
 
 | Phase | Tasks | Done / Total | Status |
 |---|---|---|---|
-| 0 — Scaffold: two surfaces from minute one | 14 | 1 / 14 | in progress |
-| 1 — Data layer | 12 | 0 / 12 | not started |
+| 0 — Scaffold: two surfaces from minute one | 15 | 12 / 15 | in progress |
+| 1 — Data layer | 12 | 1 / 12 | in progress |
 | 2 — Core UI: flip + persist | 12 | 0 / 12 | not started |
 | 3 — Active typing mode | 6 | 0 / 6 | not started |
 | 4 — Card editor, export & import | 11 | 0 / 11 | not started |
@@ -38,7 +38,7 @@ header `Status:` moves `not started` → `in progress` → `complete`.
 | 7 — Verifiable gates | 5 | 0 / 5 | not started |
 | 8 — End-to-end acceptance | 12 | 0 / 12 | not started |
 
-**Overall:** 3 / 93 done
+**Overall:** 15 / 94 done
 
 **Critical path** — nothing downstream can be believed until these pass:
 `T-0.1 → T-0.3 → T-0.4 → T-0.13` (toolchain + web export proven on day one) ·
@@ -177,7 +177,7 @@ late".
   checkout must therefore run `expo start` (or `expo export`) once before `tsc --noEmit` passes.
 - **Blocks:** `T-0.2`, `T-0.3`, `T-0.6`, `T-0.8`, `T-1.1`
 
-### [ ] T-0.2 — Set `app.json` web output to `single`
+### [x] T-0.2 — Set `app.json` web output to `single`
 
 - **Depends on:** `T-0.1`
 - **Size:** `S`
@@ -189,10 +189,12 @@ late".
 - **Files / artifacts:** `app.json`
 - **Done when:** the key is present and reads exactly `single`.
 - **Verify:** `node -e "console.log(require('./app.json').expo.web.output)"` prints `single`.
-- **Evidence:** -
+- **Evidence:** `app.json` shipped the scaffold default `"output": "static"` (confirming Open question 3).
+  Changed that one value to `"single"`; the rest of the file is untouched.
+  `node -e "console.log(require('./app.json').expo.web.output)"` → **`single`**.
 - **Blocks:** `T-0.8`, `T-7.1`
 
-### [ ] T-0.3 — Install NativeWind and Tailwind, add config and global stylesheet
+### [x] T-0.3 — Install NativeWind and Tailwind, add config and global stylesheet
 
 - **Depends on:** `T-0.1`
 - **Size:** `M`
@@ -207,10 +209,24 @@ late".
 - **Done when:** the config and stylesheet exist and the packages are in `package.json` dependencies.
 - **Verify:** `node -e "require('./tailwind.config.js'); console.log('ok')"` prints `ok`, and
   `grep -c '@tailwind' src/global.css` prints `3`.
-- **Evidence:** -
+- **Evidence:** `npx expo install nativewind@4.2.7` → **nativewind 4.2.7** (dependency);
+  `npx expo install --dev 'tailwindcss@^3.4.17'` → **tailwindcss ^3.4.17** (devDependency).
+  Docs read first (NativeWind v4 only; v5 is RC): **v4.2.7 is the release that adds Expo SDK 57 support**,
+  so the SDK-matching versions are `nativewind@4.2.7` + Tailwind 3.
+  `tailwind.config.js` created with exactly the prescribed shape — `content: ['./app/**/*.{ts,tsx}',
+  './src/**/*.{ts,tsx}']`, `presets: [require('nativewind/preset')]`, empty `theme.extend` (T-2.1's home),
+  `plugins: []`. `src/global.css` **already existed** (template font tokens), so the three directives were
+  prepended to it rather than a second stylesheet being created — the `:root` tokens are preserved.
+  `node -e "require('./tailwind.config.js'); console.log('ok')"` → **`ok`**; `grep -c '@tailwind'
+  src/global.css` → **`3`**.
+- **Note (peers already satisfied, nothing else installed).** NativeWind's peers were all present before
+  this task: `react-native-reanimated 4.5.1`, `react-native-safe-area-context 5.7.0`,
+  `react-native-worklets 0.10.1`, `babel-preset-expo 57.0.13`. Only two packages were added, so the
+  docs' `prettier-plugin-tailwindcss` line was deliberately **not** installed — it is a formatter, not a
+  runtime or build need (rules.md: no unrequested dependency).
 - **Blocks:** `T-0.4`, `T-2.1`
 
-### [ ] T-0.4 — Wire NativeWind into Babel and Metro, import the stylesheet in the root layout
+### [x] T-0.4 — Wire NativeWind into Babel and Metro, import the stylesheet in the root layout
 
 - **Depends on:** `T-0.3`
 - **Size:** `M`
@@ -224,7 +240,34 @@ late".
 - **Done when:** a `className`-styled element renders styled on web (not unstyled).
 - **Verify:** `npx expo start --web` on the host, and the rendered page's stylesheet contains the
   compiled utility classes — inspect the DOM in the browser.
-- **Evidence:** -
+- **Evidence:** `babel.config.js` created (`babel-preset-expo` with `jsxImportSource: 'nativewind'` +
+  `nativewind/babel`, per the v4 docs) and `metro.config.js` created
+  (`withNativeWind(getDefaultConfig(__dirname), { input: './src/global.css' })`); neither file existed
+  before — the SDK 57 template ships none. `app/_layout.tsx` now imports `../src/global.css` first.
+  `CI=1 BROWSER=none npx expo start --web --clear` → page loaded and inspected in the browser:
+  a probe element carrying `rounded-xl bg-indigo-600 px-6 py-4` computes `background-color:
+  rgb(79, 70, 229)`, `padding-top: 16px`, `border-top-left-radius: 12px`; its child carrying
+  `text-center font-semibold text-white` computes `color: rgb(255, 255, 255)`. The document stylesheet
+  (580 rules) contains the compiled utilities `.bg-indigo-600`, `.text-white`, `.rounded-xl`, `.px-6`,
+  `.py-4`. Screenshot taken: a blue box with white text renders on the scaffolded screen.
+- **Root cause fixed (uncaught web error).** The wiring alone left the app throwing
+  `Cannot manually set color scheme, as dark mode is type 'media'` on every load — an Expo error overlay
+  over the page, which would also fail `T-0.13`. Cause traced, not guessed: NativeWind's
+  `tailwind/dark-mode.js` publishes `--css-interop-darkMode` from `config('darkMode')`, Tailwind's
+  default is `media`, and `react-native-css-interop/dist/runtime/web/color-scheme.js:44-46` throws on
+  `set()` whenever that flag reads `media` — reached from the `<head>` MutationObserver at line 36 the
+  first time the injected stylesheet appears. Fixed as the error message itself prescribes: added
+  `darkMode: 'class'` to `tailwind.config.js`. Error gone (`errors: []`), styles still applied.
+- **Extra file, stated explicitly:** `app/index.tsx` gained **one** placeholder element
+  (`<View className="rounded-xl bg-indigo-600 px-6 py-4">` + a white `Text`). `app/index.tsx` is not in
+  this task's `Files / artifacts` line, but the task's own `Done when` — “a `className`-styled element
+  renders styled on web” — is unsatisfiable without one, since nothing in the template carried a
+  Tailwind class. **Finding:** this pre-satisfies `T-0.5`'s `Do` step 1 (the placeholder on the scaffolded
+  index screen); when `T-0.5` runs, only its browser **and phone** observations remain. `T-0.5`'s task text
+  was deliberately left untouched.
+- **Also needed (type-only):** `nativewind-env.d.ts` with `/// <reference types="nativewind/types" />,
+  otherwise `className` fails `tsc --noEmit` (there is no `T-0.7` gate yet to catch it). NativeWind's own
+  CLI then added it to `tsconfig.json`'s `include` automatically — that edit is the toolchain's, not hand-written.
 - **Blocks:** `T-0.5`, `T-2.1`
 
 ### [ ] T-0.5 — Prove NativeWind renders identically on web and on a device
@@ -244,7 +287,7 @@ late".
 - **Evidence:** -
 - **Blocks:** `T-2.1`, `T-2.2`
 
-### [ ] T-0.6 — Add the Jest test harness
+### [x] T-0.6 — Add the Jest test harness
 
 - **Depends on:** `T-0.1`
 - **Size:** `M`
@@ -257,10 +300,25 @@ late".
 - **Files / artifacts:** `package.json`, `jest.config.js` (or the `jest` key in `package.json`)
 - **Done when:** `npx jest --ci` runs and passes with at least one test discovered.
 - **Verify:** `npx jest --ci` exits 0 and reports ≥1 passing test.
-- **Evidence:** -
+- **Evidence:** `npx expo install jest-expo jest @types/jest @testing-library/react-native --dev`
+  (versions taken from Expo's SDK-57 unit-testing docs, not memory) → **jest-expo ~57.0.5**,
+  **jest ~29.7.0** (resolved 29.7.0), **@types/jest 29.5.14**, **@testing-library/react-native ^14.0.1**
+  (its `test-renderer` peer resolved to 1.3.0). The `jest` key was added to `package.json` rather than a
+  separate `jest.config.js` (fewer files): `preset: "jest-expo"` +
+  `testMatch: ["**/src/**/*.test.ts?(x)"]`. Trivial check added at `src/lib/smoke.test.ts`.
+  `npx jest --ci` → **exit 0**, `Test Suites: 1 passed, 1 total`, `Tests: 1 passed, 1 total`.
+- **Extra file, stated explicitly:** `tsconfig.json` needed `"types": ["jest"]`. Installing
+  `@types/jest` alone is **not** sufficient here — TypeScript 6.0.3 does not auto-include it, and
+  `tsc --noEmit` failed with `TS2593: Cannot find name 'describe'` (3 errors) on the new test file,
+  which would have failed `T-0.7`'s whole gate. Expo's own docs prescribe adding `"jest"` to `types`;
+  after the change `npx tsc --noEmit` → **exit 0**, so React/JSX/Expo types still resolve.
+- **`testMatch` widened deliberately:** the pattern covers `src/lib/**` as asked **and** `src/hooks/**`,
+  because `T-1.11` names `src/hooks/useDeck.test.ts` as its runnable check — under a `src/lib`-only
+  pattern that file would never be discovered and `T-1.11`'s `npx jest --ci` would pass while running
+  nothing (a false green). Same line, same config, no extra tooling.
 - **Blocks:** `T-0.7`, `T-1.4`, `T-1.6`, `T-1.8`, `T-4.7`
 
-### [ ] T-0.7 — Add the `verify` script to `package.json`
+### [x] T-0.7 — Add the `verify` script to `package.json`
 
 - **Depends on:** `T-0.6`, `T-0.2`
 - **Size:** `S`
@@ -272,10 +330,21 @@ late".
 - **Done when:** the script exists, byte-for-byte as the plan writes it.
 - **Verify:** `node -e "console.log(require('./package.json').scripts.verify)"` prints
   `tsc --noEmit && jest --ci && expo export --platform web`.
-- **Evidence:** -
+- **Evidence:** `"verify": "tsc --noEmit && jest --ci && expo export --platform web"` added to
+  `scripts` after `lint`.
+  `node -e "console.log(require('./package.json').scripts.verify)"` →
+  **`tsc --noEmit && jest --ci && expo export --platform web`** — byte-for-byte as §3 writes it.
+- **Also run end to end, not just string-checked:** `npm run verify` → **exit 0**. The chain ran all
+  three stages (`tsc --noEmit` clean, `Tests: 1 passed`, `Exported: dist`), so the gate works before
+  `T-0.8`'s image depends on the same export step.
+- **Real export layout, recorded here for `T-0.9`:** `dist/` contains `index.html`, `favicon.ico`,
+  `metadata.json`, `_expo/static/css/*.css`, `_expo/static/js/web/entry-*.js`, **and** a top-level
+  `assets/` tree. (`T-0.9` later listed it directly from the built image and confirmed both folders —
+  an earlier draft of this line wrongly said there was no `assets/`; that came from reading only the
+  tail of the export output, and the directory listing corrected it.)
 - **Blocks:** `T-0.10`, `T-7.1`
 
-### [ ] T-0.8 — Add `docker/web.Dockerfile`
+### [x] T-0.8 — Add `docker/web.Dockerfile`
 
 - **Depends on:** `T-0.2`, `T-0.7`
 - **Size:** `M`
@@ -291,10 +360,28 @@ late".
 - **Files / artifacts:** `docker/web.Dockerfile`
 - **Done when:** `docker build -f docker/web.Dockerfile .` completes and the image contains `/app/dist`.
 - **Verify:** `docker build -f docker/web.Dockerfile -t syntax-gym-web:local .` exits 0.
-- **Evidence:** -
+- **Evidence:** `docker/web.Dockerfile` written byte-for-byte as §3 specifies (build stage
+  `node:22-bookworm-slim AS build` → `npm ci` → `npx expo export --platform web`; runtime stage
+  `nginx:1.27-alpine AS runtime`; exec-form `CMD ["nginx", "-g", "daemon off;"]`; the `build` stage is
+  named so the `ci` profile can target it).
+  `docker build -f docker/web.Dockerfile -t syntax-gym-web:local .` → **exit 0**.
+  Contents checked, not assumed: `docker build --target build -t syntax-gym-web:build .` then
+  `ls -A /app/dist` → `_expo  assets  favicon.ico  index.html  metadata.json`;
+  `docker run --rm --entrypoint sh syntax-gym-web:local -c 'ls -A /usr/share/nginx/html'` →
+  `50x.html  _expo  assets  favicon.ico  index.html  metadata.json`.
+- **Run-order finding (task-file defect).** This task's `Depends on` does **not** list `T-0.9`, but the
+  Dockerfile does `COPY docker/nginx.conf`, so the build genuinely cannot succeed until that file
+  exists. `T-0.9` was therefore run **before** `T-0.8` (both were in the batch, so nothing was skipped —
+  only the order inside the run changed). `T-0.9`'s own `Verify` is satisfiable without this Dockerfile
+  (it mounts its config into a stock `nginx:1.27-alpine`), which is why the swap is safe.
+- **No `gai.conf` workaround needed.** The §3 "Container network gotcha" (no IPv6 route, AAAA first)
+  was probed before building rather than assumed: from inside a fresh `node:22-bookworm-slim`,
+  `fetch('https://registry.npmjs.org/nativewind')` returned **HTTP 200 in 550 ms** — no ~10 s stall —
+  so the build stage stays on the plain Debian base with no `gai.conf` line. `npm ci` and the export
+  both completed inside one 19.7 s build step.
 - **Blocks:** `T-0.9`, `T-0.10`, `T-0.13`
 
-### [ ] T-0.9 — Add `docker/nginx.conf`
+### [x] T-0.9 — Add `docker/nginx.conf`
 
 - **Depends on:** `T-0.8`
 - **Size:** `S`
@@ -312,10 +399,22 @@ late".
 - **Verify:** `docker run --rm --entrypoint nginx -v syntax-gym-web:local` after `T-0.10`, or
   `docker run --rm -v "$PWD/docker/nginx.conf":/etc/nginx/conf.d/default.conf:ro nginx:1.27-alpine nginx -t`
   reports `syntax is ok` / `test is successful`.
-- **Evidence:** -
+- **Evidence:** `docker/nginx.conf` written as §3 specifies (both `location` blocks, the immutable
+  cache header, the SPA fallback and the three `gzip` directives).
+  `docker run --rm -v "$PWD/docker/nginx.conf":/etc/nginx/conf.d/default.conf:ro nginx:1.27-alpine
+  nginx -t` → **exit 0**, `the configuration file /etc/nginx/conf.d/default.conf syntax is ok` and
+  `test is successful`.
+- **Step 3 confirmed against the real export — both folder names are right.** The plan's note asked for
+  this to be checked rather than trusted: `dist/` really does contain **both** `_expo/static/{css,js}/`
+  **and** a top-level `assets/` tree (`assets/assets/images`, `assets/node_modules/@expo-google-fonts`,
+  `assets/node_modules/expo-router`). So the `^/(_expo|assets)/` regex needed **no** adjustment, and the
+  `assets/` alternative is load-bearing (`/usr/share/nginx/html/assets` exists in the built image).
+  **Correction:** an earlier note on `T-0.7` claimed there was no top-level `assets/`; that was read from
+  truncated export output and has been fixed there.
+- **Ran before `T-0.8`:** see the run-order finding on `T-0.8` — its Dockerfile `COPY`s this file.
 - **Blocks:** `T-0.10`, `T-0.13`
 
-### [ ] T-0.10 — Add `docker-compose.yml` with `web`, `web-dev` and `ci`
+### [x] T-0.10 — Add `docker-compose.yml` with `web`, `web-dev` and `ci`
 
 - **Depends on:** `T-0.7`, `T-0.8`, `T-0.9`
 - **Size:** `M`
@@ -338,10 +437,30 @@ late".
 - **Done when:** Compose parses the file and lists the expected services.
 - **Verify:** `docker compose config --quiet` exits 0 and `docker compose --profile dev --profile ci config --services`
   lists `web`, `web-dev`, `ci` (and **not** `api`/`db`).
-- **Evidence:** -
+- **Evidence:** `docker-compose.yml` written from §3 with all five `Do` notes applied: `web` on
+  `8080:80` with `restart: unless-stopped`, `read_only: true` and `tmpfs: ["/var/cache/nginx",
+  "/var/run"]`; the healthcheck probing **`127.0.0.1`** (`wget -q --spider http://127.0.0.1:80/`);
+  `web-dev` under `profiles: ["dev"]` with the `.:/app` bind mount, the `/app/node_modules` anonymous
+  volume, `init: true` and `REACT_NATIVE_PACKAGER_HOSTNAME=${HOST_IP:?...}`; `ci` under
+  `profiles: ["ci"]` building `target: build` and running `["npm", "run", "verify"]`; and the `api`/`db`
+  block plus the `pgdata` volume carried over as **comments**.
+  Step 6 was applied too: `EXPO_NO_TELEMETRY` / `BROWSER` / `CI` were **not** repeated in Compose, since
+  §3 puts them in `docker/dev.Dockerfile` — `web-dev` sets only the one variable Compose must compute
+  (`REACT_NATIVE_PACKAGER_HOSTNAME`), with a comment saying where the others live.
+  `docker compose config --quiet` → **exit 0**. With `HOST_IP` exported from the LAN IPv4,
+  `docker compose --profile dev --profile ci config --services` → **`ci`, `web`, `web-dev`** — no `api`,
+  no `db`.
+- **Note (`HOST_IP` is required for the dev profile).** `${HOST_IP:?...}` makes Compose fail fast rather
+  than advertise a container IP, so the profile-aware `config` check above only passes with `HOST_IP`
+  set — true locally (exported from `hostname -I | awk '{print $1}'`) and true in `T-7.3`. No `.env` was
+  created here (`T-0.12` owns the example file, and a real `.env` is machine-local).
+- **New prerequisite discovered — `T-0.15` added below.** `web-dev` builds from
+  `docker/dev.Dockerfile`, but **no task in this file creates that file**; `T-0.10` did not create it
+  either, because its `Files / artifacts` line names only `docker-compose.yml`. It is recorded as a new
+  task rather than folded in here.
 - **Blocks:** `T-0.12`, `T-0.13`, `T-7.1`, `T-7.3`
 
-### [~] T-0.11 — Add `.dockerignore` and extend `.gitignore`
+### [x] T-0.11 — Add `.dockerignore` and extend `.gitignore`
 
 - **Depends on:** `T-0.1`
 - **Size:** `S`
@@ -363,7 +482,22 @@ late".
   `*.keystore`, `*.jks`, plus `.github/prompts/` at the user's request. Verified with `git check-ignore -q`:
   IGNORED for `android/`, `android/app/build/outputs/apk/release/app-release.apk` and
   `app-release.apk`. GitHub's contents API returns **404** for `.github` — proof it is unpublished,
-  not merely listed in a `.gitignore`. **Still missing: `.dockerignore`**, so the task stays open.
+  not merely listed in a `.gitignore`.
+- **Completed this run.** `.dockerignore` created with the six required entries — `node_modules`,
+  `.git`, `dist`, `.expo`, `.env*`, `*.log` — plus `android` and `ios`, because those two are generated
+  (`T-0.11`'s step 3 makes `android/` explicitly ignored) and would otherwise ship a multi-GB build
+  context to an image that only needs app source. `.gitignore` needed **no** change: steps 2 and 3 were
+  already satisfied (`.env` at line 41, `/android` at line 53), re-checked rather than assumed.
+  **Both halves of `Verify` now pass.** Part 1 —
+  `git check-ignore -v .env android/app/build/outputs/apk/release/app-release.apk` →
+  `.gitignore:41:.env  .env` and `.gitignore:53:/android  android/app/build/.../app-release.apk`
+  (a match for each); `.env.example` and `.github/workflows/ci.yml` both report **NOT ignored**.
+  Part 2 — `docker build -f docker/web.Dockerfile . 2>&1 | grep -c node_modules` → **`0`**.
+  Because that count is weak evidence on its own (a cached build prints almost nothing), the context
+  was also listed directly: a throwaway `printf 'FROM busybox\nCOPY . /ctx\nRUN ls -A /ctx\n' |
+  docker build -f- .` shows the context contains `app`, `assets`, `src`, `docker`, `node_modules`
+  **absent**, `dist` **absent**, `.git`/`.expo` **absent**, no `.env*` — i.e. `.dockerignore` is doing
+  its job, at a **3.72 kB** context transfer.
 - **Note:** `git check-ignore android` (bare name, no trailing slash) does **not** match an
   `android/` directory-only pattern, because git cannot tell the path is a directory. Check a real
   path *under* it instead — the tree itself is genuinely ignored.
@@ -372,7 +506,7 @@ late".
   with `git check-ignore -q .github/workflows/ci.yml` → must report **NOT** ignored.
 - **Blocks:** `T-0.13`
 
-### [ ] T-0.12 — Add `.env.example` documenting `HOST_IP`
+### [x] T-0.12 — Add `.env.example` documenting `HOST_IP`
 
 - **Depends on:** `T-0.10`
 - **Size:** `S`
@@ -386,10 +520,21 @@ late".
 - **Done when:** the file exists, is tracked by git, and contains no secret.
 - **Verify:** `grep -n 'HOST_IP' .env.example` shows the line, and `git status --porcelain .env.example`
   does not show it as ignored.
-- **Evidence:** -
+- **Evidence:** `.env.example` created: a comments-only block explaining that `HOST_IP` is what Metro
+  advertises bundle URLs with, the exact fill-in command `hostname -I | awk '{print $1}'`, why
+  `.env` is ignored while this file is not, and the failure Compose raises when it is unset. Then the
+  bare key **with no value**: `HOST_IP=`. No secret, as the `Done when` requires.
+  `grep -n 'HOST_IP' .env.example` → line 13 (the comment) and **line 14 `HOST_IP=`**.
+  `git status --porcelain .env.example` → `?? .env.example` — untracked, **not** ignored (an ignored
+  path never appears without `--ignored`). Confirmed again by
+  `git check-ignore -q .env.example` → **not ignored**.
+- **Staged, so "tracked by git" is literally true:** `git add .env.example` →
+  `git status --porcelain` now reports `A  .env.example`. Staging only; **no commit or push was made**
+  (no task in the batch asks for one). This also doubles as the proof the file is committable rather
+  than merely absent from `.gitignore`.
 - **Blocks:** `T-7.3`
 
-### [ ] T-0.13 — Phase 0 gate — the container serves a web build
+### [x] T-0.13 — Phase 0 gate — the container serves a web build
 
 - **Depends on:** `T-0.8`, `T-0.9`, `T-0.10`, `T-0.11`
 - **Size:** `M`
@@ -406,7 +551,25 @@ late".
   `http://127.0.0.1:8080/`.
 - **Verify:** `docker compose ps --format '{{.Service}} {{.Health}}'` prints `web healthy`, **and** a
   browser load of `http://127.0.0.1:8080/` shows the scaffolded screen with NativeWind styles applied.
-- **Evidence:** -
+- **Evidence:** `docker compose up --build -d` → exit 0, image `syntax-gym-web:local` built and
+  `doulingoforcoding-web-1` started. Health was **read until it changed, not assumed**: the first
+  `ps` said `web starting` (`FailingStreak: 0`, `Log: []` — no probe had landed yet), and the next read
+  gave `docker compose ps --format '{{.Service}} {{.Health}}'` → **`web healthy`**.
+  `curl http://127.0.0.1:8080/` → **HTTP 200**, `<title>Doulingoforcoding</title>`; the healthcheck's own
+  probe also succeeds from inside (`docker exec ... wget -q --spider http://127.0.0.1:80/` → OK).
+  Browser load of `http://127.0.0.1:8080/` inspected in the DOM: the Tailwind probe box carries
+  `rounded-xl bg-indigo-600 px-6 py-4` and computes `background-color: rgb(79, 70, 229)`,
+  `padding-top: 16px`; `hasErrorOverlay: false`; the page pulls
+  `/_expo/static/css/web-*.css` and `/_expo/static/js/web/entry-*.js` from the container. Screenshot taken.
+- **The `Do` step 4 suspicion was checked, and is not the problem.** The asset regex is correct because
+  `_expo` is genuinely the emitted folder — assets resolve with **HTTP 200** and
+  `Content-Type: text/css`. Serving rules verified end to end rather than eyeballed:
+  `index.html` → `Cache-Control: no-cache`; the hashed CSS →
+  `Cache-Control: public, max-age=31536000, immutable`; `GET /explore` → **HTTP 200 text/html**
+  (SPA fallback works, so client-side routes will not 404); the shell comes back
+  `Content-Encoding: gzip`. `docker compose logs web` filtered for
+  `permission denied|error|crit|warn` → **empty**, i.e. `read_only: true` with the two `tmpfs` mounts is
+  clean on this nginx (the decision `T-7.2` is asked to make is already looking like "keep it").
 - **Blocks:** `T-2.1`, `T-7.2`
 
 ### [ ] T-0.14 — Smoke-build an APK from the bare scaffold
@@ -437,6 +600,31 @@ late".
   accepted as the way the app ships. Installing this throwaway build on the phone is optional, and
   only worth it if you want the earliest possible confirmation that sideloading works.
 
+### [ ] T-0.15 — Add `docker/dev.Dockerfile`
+
+- **Depends on:** `T-0.8`
+- **Size:** `S`
+- **Why:** Discovered while running `T-0.10` (`2026-09-28`), not planned. `docker-compose.yml`'s
+  `web-dev` service does `build: { dockerfile: docker/dev.Dockerfile }` and §3 specifies that file —
+  but **no task in this file created it**, so `docker compose --profile dev up web-dev` (and with it
+  `T-7.3`) had no image to build. `T-0.10` deliberately did not create it: that task's
+  `Files / artifacts` line names `docker-compose.yml` only.
+- **Do:**
+  1. Write the file exactly as §3 specifies: `FROM node:22-bookworm-slim`, `WORKDIR /app`,
+     `COPY package.json package-lock.json ./`, `RUN npm ci`, `COPY . .`,
+     `ENV EXPO_NO_TELEMETRY=1 BROWSER=none CI=1`, `EXPOSE 8081`,
+     `CMD ["npx", "expo", "start", "--port", "8081"]`.
+  2. Keep `EXPO_NO_TELEMETRY` / `BROWSER` / `CI` **here** and not in Compose — `T-0.10`'s step 6 removed
+     them from `web-dev` on the assumption this file owns them, so a value added in both places would
+     undo that de-duplication.
+- **Files / artifacts:** `docker/dev.Dockerfile`
+- **Done when:** the image builds and the file matches §3.
+- **Verify:** `docker build -f docker/dev.Dockerfile -t syntax-gym-web-dev:local .` exits 0.
+- **Evidence:** -
+- **Blocks:** `T-7.3`
+- **Note:** `T-7.3`'s `Depends on` line does not name this task and should. `T-7.3` is outside the batch
+  that found this gap, so its text was left untouched deliberately — noted here so the next run sees it.
+
 ---
 
 ## Phase 1 — Data layer
@@ -444,7 +632,7 @@ late".
 Maps to §6 Step 2. Content and progress are separate maps, `schemaVersion` + `migrate()` exist from
 day one, and `normalize.ts` is the single comparison rule the typing mode will use.
 
-### [ ] T-1.1 — Create `src/types/card.ts`
+### [x] T-1.1 — Create `src/types/card.ts`
 
 - **Depends on:** `T-0.1`
 - **Size:** `S`
@@ -459,7 +647,13 @@ day one, and `normalize.ts` is the single comparison rule the typing mode will u
 - **Files / artifacts:** `src/types/card.ts`
 - **Done when:** `tsc --noEmit` passes and the file exports all five symbols.
 - **Verify:** `npx tsc --noEmit` exits 0.
-- **Evidence:** -
+- **Evidence:** `src/types/card.ts` created by transcribing §1's Data Model block verbatim —
+  `ModuleId`, `Status`, `Card` (with `deletedAt?: number`), `ReviewState`, `PersistedState`
+  (`schemaVersion: 1`, `cards: Record<string, Card>`, `reviews: Record<string, ReviewState>` — content
+  and progress as **separate maps**). The two `Record` maps are the point of the task, so they were
+  checked literally rather than by eye. `npx tsc --noEmit` → **exit 0**, and a symbol sweep confirms
+  all five are exported: `ModuleId` (line 1), `Status` (2), `Card` (4), `ReviewState` (16),
+  `PersistedState` (26).
 - **Blocks:** `T-1.2`, `T-1.3`, `T-1.9`, `T-2.3`
 
 ### [ ] T-1.2 — Create `src/lib/seedCards.ts` with the exact 17 cards

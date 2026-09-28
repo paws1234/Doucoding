@@ -1,0 +1,10 @@
+node_modules
+.git
+dist
+.expo
+.env*
+*.log
+
+# generated native projects — never needed to build the web image, and large
+android
+ios

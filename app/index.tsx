@@ -1,5 +1,5 @@
 import * as Device from 'expo-device';
-import { Platform, StyleSheet } from 'react-native';
+import { Platform, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AnimatedIcon } from '@/components/animated-icon';
@@ -42,6 +42,11 @@ export default function HomeScreen() {
         <ThemedText type="code" style={styles.code}>
           get started
         </ThemedText>
+
+        {/* T-0.4 placeholder: proves NativeWind compiles className. T-0.5 finalises it. */}
+        <View className="rounded-xl bg-indigo-600 px-6 py-4">
+          <Text className="text-center font-semibold text-white">NativeWind is wired up</Text>
+        </View>
 
         <ThemedView type="backgroundElement" style={styles.stepContainer}>
           <HintRow

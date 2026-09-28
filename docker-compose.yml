@@ -1,0 +1,54 @@
+services:
+  web:
+    build: { context: ., dockerfile: docker/web.Dockerfile }
+    image: syntax-gym-web:local
+    ports: ["8080:80"]
+    restart: unless-stopped
+    healthcheck:
+      # 127.0.0.1, never `localhost`: busybox wget resolves localhost -> ::1 first,
+      # nginx listens on IPv4 only, and the check then fails forever.
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:80/"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    read_only: true        # verify on first run; drop if nginx needs another writable path
+    tmpfs: ["/var/cache/nginx", "/var/run"]
+
+  # Dev server:  docker compose --profile dev up web-dev
+  web-dev:
+    profiles: ["dev"]
+    build: { context: ., dockerfile: docker/dev.Dockerfile }
+    ports: ["8081:8081"]
+    environment:
+      # Metro advertises bundle URLs using this host. Unset inside a container it
+      # advertises the container IP and the host browser cannot load the bundle.
+      # EXPO_NO_TELEMETRY / BROWSER / CI are set once, in docker/dev.Dockerfile.
+      - REACT_NATIVE_PACKAGER_HOSTNAME=${HOST_IP:?set HOST_IP to your LAN IP}
+    volumes:
+      - .:/app
+      - /app/node_modules
+    init: true
+
+  # One-shot gate: typecheck + tests + web export must all pass.
+  ci:
+    profiles: ["ci"]
+    build: { context: ., dockerfile: docker/web.Dockerfile, target: build }
+    command: ["npm", "run", "verify"]
+
+  # ---- Phase 5 only: cross-device sync. Off unless explicitly requested. ----
+  # api:
+  #   profiles: ["sync"]
+  #   build: { context: ./services/api }
+  #   ports: ["3000:3000"]
+  #   environment: ["DATABASE_URL=postgres://gym:gym@db:5432/gym"]
+  #   depends_on: { db: { condition: service_healthy } }
+  # db:
+  #   profiles: ["sync"]
+  #   image: postgres:16-alpine
+  #   environment: ["POSTGRES_USER=gym", "POSTGRES_PASSWORD=gym", "POSTGRES_DB=gym"]
+  #   volumes: ["pgdata:/var/lib/postgresql/data"]
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U gym"]
+  #     interval: 5s
+  # volumes: { pgdata: }
