@@ -28,9 +28,9 @@ header `Status:` moves `not started` → `in progress` → `complete`.
 
 | Phase | Tasks | Done / Total | Status |
 |---|---|---|---|
-| 0 — Scaffold: two surfaces from minute one | 15 | 12 / 15 | in progress |
-| 1 — Data layer | 12 | 1 / 12 | in progress |
-| 2 — Core UI: flip + persist | 12 | 0 / 12 | not started |
+| 0 — Scaffold: two surfaces from minute one | 15 | 13 / 15 | in progress |
+| 1 — Data layer | 12 | 12 / 12 | complete |
+| 2 — Core UI: flip + persist | 12 | 1 / 12 | in progress |
 | 3 — Active typing mode | 6 | 0 / 6 | not started |
 | 4 — Card editor, export & import | 11 | 0 / 11 | not started |
 | 5 — Polish & ship | 13 | 0 / 13 | not started |
@@ -38,7 +38,7 @@ header `Status:` moves `not started` → `in progress` → `complete`.
 | 7 — Verifiable gates | 5 | 0 / 5 | not started |
 | 8 — End-to-end acceptance | 12 | 0 / 12 | not started |
 
-**Overall:** 15 / 94 done
+**Overall:** 28 / 94 done
 
 **Critical path** — nothing downstream can be believed until these pass:
 `T-0.1 → T-0.3 → T-0.4 → T-0.13` (toolchain + web export proven on day one) ·
@@ -600,7 +600,7 @@ late".
   accepted as the way the app ships. Installing this throwaway build on the phone is optional, and
   only worth it if you want the earliest possible confirmation that sideloading works.
 
-### [ ] T-0.15 — Add `docker/dev.Dockerfile`
+### [x] T-0.15 — Add `docker/dev.Dockerfile`
 
 - **Depends on:** `T-0.8`
 - **Size:** `S`
@@ -620,7 +620,14 @@ late".
 - **Files / artifacts:** `docker/dev.Dockerfile`
 - **Done when:** the image builds and the file matches §3.
 - **Verify:** `docker build -f docker/dev.Dockerfile -t syntax-gym-web-dev:local .` exits 0.
-- **Evidence:** -
+- **Evidence:** `docker/dev.Dockerfile` written exactly as §3's block — `FROM node:22-bookworm-slim`, `WORKDIR /app`, `COPY package.json package-lock.json ./`, `RUN npm ci`, `COPY . .`, `ENV EXPO_NO_TELEMETRY=1 BROWSER=none CI=1`, `EXPOSE 8081`, exec-form `CMD ["npx", "expo", "start", "--port", "8081"]` (exec form keeps SIGTERM reaching the process).
+  Step 2 was re-read rather than assumed: Compose's `web-dev` sets **only**
+  `REACT_NATIVE_PACKAGER_HOSTNAME`, so `EXPO_NO_TELEMETRY`/`BROWSER`/`CI` genuinely live here alone.
+  `docker build -f docker/dev.Dockerfile -t syntax-gym-web-dev:local .` → **exit 0**,
+  `naming to docker.io/library/syntax-gym-web-dev:local`.
+  Contents checked rather than assumed: `docker run --rm --entrypoint node syntax-gym-web-dev:local -e
+  "console.log('expo', require('/app/package.json').dependencies.expo)"` → **`expo ~57.0.25`**, i.e. the
+  image really carries the app source and its installed dependencies.
 - **Blocks:** `T-7.3`
 - **Note:** `T-7.3`'s `Depends on` line does not name this task and should. `T-7.3` is outside the batch
   that found this gap, so its text was left untouched deliberately — noted here so the next run sees it.
@@ -656,7 +663,7 @@ day one, and `normalize.ts` is the single comparison rule the typing mode will u
   `PersistedState` (26).
 - **Blocks:** `T-1.2`, `T-1.3`, `T-1.9`, `T-2.3`
 
-### [ ] T-1.2 — Create `src/lib/seedCards.ts` with the exact 17 cards
+### [x] T-1.2 — Create `src/lib/seedCards.ts` with the exact 17 cards
 
 - **Depends on:** `T-1.1`
 - **Size:** `M`
@@ -671,10 +678,17 @@ day one, and `normalize.ts` is the single comparison rule the typing mode will u
   `ModuleId` values, `isCustom: false` on all.
 - **Verify:** `grep -c "id: 'seed-" src/lib/seedCards.ts` prints `17`, and
   `npx tsc --noEmit` exits 0.
-- **Evidence:** -
+- **Evidence:** `src/lib/seedCards.ts` created as one exported `Card[]` — all 17 of §5's rows
+  transcribed verbatim, ids in §1's `seed-<module>-<n>` form, the PHP `??` card keeping its
+  deliberately JavaScript phrasing (§5 footnote). All 17 spread a single `SEED_DEFAULTS`
+  (`isCustom: false` plus a fixed `SEEDED_AT`) so re-seeding is idempotent — a per-launch
+  `Date.now()` would rewrite all 17 records on every start and defeat `T-1.10`'s merge.
+  `grep -c "id: 'seed-" src/lib/seedCards.ts` → **17**; duplicate-id sweep
+  (`grep -o … | sort | uniq -d`) → **empty**; per-module counts → **containers 4, js-ts 5,
+  php-laravel 4, sql 4**; `grep -c 'isCustom: true'` → **0**; `npx tsc --noEmit` → **exit 0**.
 - **Blocks:** `T-1.9`, `T-8.1`
 
-### [ ] T-1.3 — Create `src/lib/storage.ts`
+### [x] T-1.3 — Create `src/lib/storage.ts`
 
 - **Depends on:** `T-1.1`
 - **Size:** `M`
@@ -688,10 +702,32 @@ day one, and `normalize.ts` is the single comparison rule the typing mode will u
 - **Files / artifacts:** `src/lib/storage.ts`, `package.json` (`@react-native-async-storage/async-storage`)
 - **Done when:** the module compiles and the storage key is a single exported constant.
 - **Verify:** `npx tsc --noEmit` exits 0 and `grep -n "syntax-gym/v1/state" src/lib/storage.ts` matches once.
-- **Evidence:** -
+- **Evidence:** `npx expo install @react-native-async-storage/async-storage` → **2.2.0** (a dependency;
+  `expo install` chose the SDK-57-compatible version rather than a hand-picked one). `src/lib/storage.ts`
+  created with typed `loadState()` / `saveState()`, one exported `STORAGE_KEY`, and `emptyState()` for
+  the nothing-stored-yet path. `grep -n "syntax-gym/v1/state" src/lib/storage.ts` → **line 6, one
+  match**. `npx tsc --noEmit` → **exit 0**.
+- **Note (debounce shape).** Coalescing, not a trailing reset: the timer is armed once and always
+  writes the newest document, so a change every 200 ms still lands within one window instead of
+  starving the write forever. `pending` is cleared only *after* `setItem` resolves, so a rejected write
+  leaves the document queued rather than silently dropping the deck.
+- **Extra export, stated explicitly.** `flushState()` is exported and not named in the `Do` steps. The
+  debounce is only safe if something can write immediately: `T-1.5`'s save→load round-trip case needs
+  it, and so does an app-lifecycle flush in `T-1.11`. Without it both callers sit at the timer's mercy.
+- **Lint note (pre-existing, not this batch).** `npx expo lint` reports **1 error** in the SDK 57
+  template's `src/hooks/use-color-scheme.web.ts` (`react-hooks/set-state-in-effect`). It is untouched by
+  this task and by every task in the batch, and lint is not part of `npm run verify`. The new `src/lib`
+  files are clean.
+- **Lint tooling side effect, reverted.** Running `npx expo lint` at all **self-scaffolds**: it installed
+  `eslint@^9` + `eslint-config-expo~57` as devDependencies and wrote `eslint.config.js`. No task asks for
+  either, so both were removed again (`npm uninstall`, `rm eslint.config.js`) — `package.json`'s diff
+  now contains only the `async-storage` line. Consequence to know: `"lint": "expo lint"` has been in
+  `scripts` since the scaffold, but **the repo has no linter installed**, and the next `expo lint` run
+  will re-create these two files. That is why the pre-existing error above is reported rather than
+  fixed.
 - **Blocks:** `T-1.4`, `T-1.5`, `T-1.9`
 
-### [ ] T-1.4 — Add `schemaVersion` handling and `migrate()` to `src/lib/storage.ts`
+### [x] T-1.4 — Add `schemaVersion` handling and `migrate()` to `src/lib/storage.ts`
 
 - **Depends on:** `T-1.3`
 - **Size:** `M`
@@ -705,10 +741,23 @@ day one, and `normalize.ts` is the single comparison rule the typing mode will u
 - **Files / artifacts:** `src/lib/storage.ts`
 - **Done when:** `migrate()` is exported and called on the load path.
 - **Verify:** the check in `T-1.5` passes: `npx jest src/lib/storage.test.ts --ci`.
-- **Evidence:** -
+- **Evidence:** `src/lib/storage.ts` gained an exported `migrate()` plus the version check on the load
+  path. `migrate()` is one `switch` with a single `case SCHEMA_VERSION:` — the next bump is one case
+  and one `return`, as step 3 asks — and it returns `null` for a missing *or* unknown version.
+  It also rejects a version match whose `cards`/`reviews` are not records, so a truncated document
+  cannot reach the merge and crash it.
+- **How step 2 is actually satisfied.** `loadState()` now returns `LoadResult { state, newerVersion? }`.
+  Unparseable JSON and a malformed shape both fall back to `emptyState()` **without writing**, and a
+  `schemaVersion` greater than this build's reports `newerVersion` *and* sets a module-level write
+  block. The block is the load-bearing half: `flushState()` refuses the write, so a fresh deck cannot
+  land on top of a document this build cannot read. `T-1.5`'s last case asserts the stored bytes are
+  **unchanged** after a `saveState` + `flushState`.
+- **Verify, run as written:** deferred to `T-1.5` exactly as this task's `Verify` line specifies —
+  `npx jest src/lib/storage.test.ts --ci` → **6 passed**. `migrate()` is exported and called from
+  `loadState` (`migrate(parsed) ?? emptyState()`).
 - **Blocks:** `T-1.5`, `T-1.9`, `T-4.6`
 
-### [ ] T-1.5 — Add `src/lib/storage.test.ts`
+### [x] T-1.5 — Add `src/lib/storage.test.ts`
 
 - **Depends on:** `T-1.4`, `T-0.6`
 - **Size:** `M`
@@ -723,10 +772,24 @@ day one, and `normalize.ts` is the single comparison rule the typing mode will u
 - **Files / artifacts:** `src/lib/storage.test.ts`
 - **Done when:** the suite fails if `migrate()` is removed or a version is dropped on the floor.
 - **Verify:** `npx jest src/lib/storage.test.ts --ci` exits 0 with all cases passing.
-- **Evidence:** -
+- **Evidence:** `src/lib/storage.test.ts` created, mocking AsyncStorage with the package's own mock
+  (`@react-native-async-storage/async-storage/jest/async-storage-mock`) rather than a hand-rolled one —
+  no device, fixtures are literal objects.
+  `npx jest src/lib/storage.test.ts --ci` → **exit 0, 6 passed**: `migrate()` accepts v1 and rejects a
+  version dropped on the floor, a future version, a string and `null`; an empty store yields a valid
+  empty `PersistedState` and does **not** create the document; a full document round-trips save → load
+  with deep equality (tombstone and non-default review state intact); unparseable JSON resolves to a
+  fresh state without throwing with the bytes preserved; a malformed `cards` value does the same; and a
+  newer `schemaVersion` is reported with the stored bytes **unchanged** after a save attempt.
+- **`Done when` proved, not assumed:** renaming `case SCHEMA_VERSION:` to `case -1:` (dropping the
+  version on the floor) made the suite fail — **2 failed, 4 passed**; restored and re-run → **6 passed**,
+  `npx tsc --noEmit` → **exit 0**.
+- **Note:** the newer-version case is declared last on purpose — `loadState` sets a module-level write
+  block that stands for the module's lifetime, so it has to run after the cases that need writes to
+  land. A comment in the file says so.
 - **Blocks:** `T-1.11`
 
-### [ ] T-1.6 — Create `src/lib/normalize.ts`
+### [x] T-1.6 — Create `src/lib/normalize.ts`
 
 - **Depends on:** `T-0.1`
 - **Size:** `S`
@@ -741,10 +804,18 @@ day one, and `normalize.ts` is the single comparison rule the typing mode will u
 - **Files / artifacts:** `src/lib/normalize.ts`
 - **Done when:** the module compiles and exports a single comparison entry point.
 - **Verify:** `npx jest src/lib/normalize.test.ts --ci` passes (written in `T-1.7`).
-- **Evidence:** -
+- **Evidence:** `src/lib/normalize.ts` created exporting exactly **one** comparison entry point,
+  `compareAnswer(typed, expected) → AnswerComparison { correct, answer, expected }` (plus that type).
+  Whitespace is the only thing relaxed — `replace(/\s+/g, ' ').trim()` handles leading indentation,
+  interior spacing runs, line breaks and trailing newlines in one line. Case, quotes, brackets,
+  operators and punctuation are untouched, as step 2 requires. The normaliser itself is a
+  module-private one-liner, so there is no second entry point to call by accident, and the returned
+  normalised forms are what `T-3.4`'s feedback UI diffs (step 3).
+- **Verify, run as written:** deferred to `T-1.7` exactly as this task's `Verify` line says —
+  `npx jest src/lib/normalize.test.ts --ci` → **15 passed**; `npx tsc --noEmit` → **exit 0**.
 - **Blocks:** `T-1.7`, `T-3.1`, `T-3.3`
 
-### [ ] T-1.7 — Add `src/lib/normalize.test.ts`
+### [x] T-1.7 — Add `src/lib/normalize.test.ts`
 
 - **Depends on:** `T-1.6`, `T-0.6`
 - **Size:** `M`
@@ -759,10 +830,21 @@ day one, and `normalize.ts` is the single comparison rule the typing mode will u
 - **Files / artifacts:** `src/lib/normalize.test.ts`
 - **Done when:** both groups pass, and the suite fails if the punctuation checks are loosened.
 - **Verify:** `npx jest src/lib/normalize.test.ts --ci` exits 0.
-- **Evidence:** -
+- **Evidence:** `src/lib/normalize.test.ts` created with both groups the `Do` steps name, every case
+  asserting on `compareAnswer(...).correct` rather than on an internal helper. The `must pass` rows and
+  several `must fail` rows read **§5's real seed answers** out of `seedCards` (§5's own wording: "one of
+  §5's real seed answers typed exactly"), so the cases cannot silently drift from the shipped dataset.
+  `npx jest src/lib/normalize.test.ts --ci` → **exit 0, 15 passed** — 7 correct (exact seed, leading
+  indentation, interior spaces, surrounding spaces, trailing newline, tabs, and a multi-line SQL answer
+  split where the seed has a space) and 7 incorrect (changed bracket `obj(key)`, the wrong container
+  bracket `[ ]` for `( )`, changed operator `=` for `=>`, reordered words, missing semicolon, changed
+  case, quoted key where the seed is unquoted).
+- **`Done when` proved, not assumed:** loosening the punctuation handling (making `collapseWhitespace`
+  also strip `[^a-z0-9 ]`) failed **6 of 15** — precisely the punctuation cases; restored → **15 passed**,
+  `npx tsc --noEmit` → **exit 0**.
 - **Blocks:** `T-1.11`, `T-3.3`, `T-8.4`
 
-### [ ] T-1.8 — Create `src/lib/srs.ts`
+### [x] T-1.8 — Create `src/lib/srs.ts`
 
 - **Depends on:** `T-1.1`
 - **Size:** `M`
@@ -777,12 +859,28 @@ day one, and `normalize.ts` is the single comparison rule the typing mode will u
 - **Files / artifacts:** `src/lib/srs.ts`
 - **Done when:** the module compiles and exports scheduling plus ordering.
 - **Verify:** `npx jest src/lib/srs.test.ts --ci` passes (written in `T-1.9`).
-- **Evidence:** -
+- **Evidence:** `src/lib/srs.ts` created exporting the two things this task names —
+  `scheduleReview(previous, correct, now) → ReviewState` (pure, `now` injected) and
+  `queueRank(review, now)` for the due → Need Practice → New rule. §4 Phase 3's numbers are SM-2's own
+  (default ease 2.5, floor 1.3, −0.2 per wrong answer), so no constant is invented; a wrong answer is
+  the only thing that lowers ease, which is what the floor then clamps.
+- **One deliberate asymmetry:** `status` is written on **incorrect only**. `T-3.5`'s manual status
+  buttons own that field, and this function also writing it on a correct answer would give one field
+  two writers. Matches §4 Phase 3 ("incorrect → … and flag Need Practice").
+- **Ease is rounded to a tenth per step** because repeated `-0.2` otherwise leaves `1.9000000000000001`.
+  `queueRank` returns 0/1/2 with the order named in its comment; `Array.prototype.sort` is stable, so
+  `T-5.2`'s "stable order inside a bucket" costs the caller nothing.
+- **Verify, run as written:** deferred to `T-1.9` exactly as this task's `Verify` line says —
+  `npx jest src/lib/srs.test.ts --ci` → **5 passed**; `npx tsc --noEmit` → **exit 0**.
+- **`ponytail:` no interval cap.** The floor keeps `ease` sane, but nothing bounds `intervalDays`, so a
+  long correct streak does walk a card out to years — which is the outcome step 3's rationale was
+  aiming at. Left as a marked cut rather than inventing a cap constant no task names; the upgrade path
+  is recorded in the file (a cap when the scheduler stops being "lite", §10).
 - **Blocks:** `T-1.9`, `T-2.8`, `T-5.1`
 - **Note:** `srs.ts` is written here but is **not** wired into the session until `T-5.1`; Phase 2's
   queue is status-only so the flip loop can be proven first.
 
-### [ ] T-1.9 — Add `src/lib/srs.test.ts`
+### [x] T-1.9 — Add `src/lib/srs.test.ts`
 
 - **Depends on:** `T-1.8`, `T-0.6`
 - **Size:** `S`
@@ -796,10 +894,25 @@ day one, and `normalize.ts` is the single comparison rule the typing mode will u
 - **Files / artifacts:** `src/lib/srs.test.ts`
 - **Done when:** all cases pass without touching AsyncStorage.
 - **Verify:** `npx jest src/lib/srs.test.ts --ci` exits 0.
-- **Evidence:** -
+- **Evidence:** `src/lib/srs.test.ts` created, all four `Do` cases covered, `now` injected everywhere
+  (a `NOW` constant) so nothing depends on the clock; AsyncStorage is never imported.
+  `npx jest src/lib/srs.test.ts --ci` → **exit 0, 5 passed**: a fresh card's correct answer gives
+  `intervalDays` 1, seeds ease 2.5, sets `dueAt = now + 1 day`, leaves `status` at `new`, and the next
+  correct answer grows the interval without dropping ease; a wrong answer on a 21-day `mastered` card
+  resets `intervalDays` to 1, flags `need-practice`, lowers ease and does **not** increment
+  `correctCount`; 21 consecutive wrong answers stop at ease **1.3**; `queueRank` orders due <
+  need-practice < new, treats a missing review exactly like New, ranks a not-yet-due card with New, and
+  a real `sort` of `[fresh, practice, due]` yields `[due, practice, fresh]`; a card due exactly `now`
+  counts as due.
+- **`Done when` proved, not assumed:** lowering the floor (`MIN_EASE` 1.3 → 0) failed the floor case —
+  **1 failed, 4 passed**; restored → **5 passed**, `npx tsc --noEmit` → **exit 0**.
+- **Note on a first, bogus attempt at that check:** an earlier `sed` edit left an unbalanced paren on
+  line 40, so that run reported `Tests: 0 total` — a compile error, not a failing assertion, and so
+  proof of nothing. It was repaired and the check re-run properly; the final run above confirms the
+  file compiles.
 - **Blocks:** `T-5.1`, `T-5.2`
 
-### [ ] T-1.10 — Create `src/hooks/useDeck.ts` — hydrate and merge
+### [x] T-1.10 — Create `src/hooks/useDeck.ts` — hydrate and merge
 
 - **Depends on:** `T-1.2`, `T-1.3`, `T-1.4`
 - **Size:** `M`
@@ -815,10 +928,27 @@ day one, and `normalize.ts` is the single comparison rule the typing mode will u
 - **Done when:** a slice of the app can read merged deck state on web and on the phone.
 - **Verify:** `npx tsc --noEmit` exits 0, and after `T-2.2` the app renders 17 seeded cards on first
   run — re-verify here with a temporary `console.log` of the merged card count on web.
-- **Evidence:** -
+- **Evidence:** `src/hooks/useDeck.ts` created with `useReducer` (§1's state choice) and the merge kept
+  as a pure `mergeDeck(stored)` **outside** the hook, so `T-1.11`'s check can call it without React.
+  The merge is exactly §1's rule: seeds are laid down first, then stored cards overlay them by id — so a
+  wording fix, a user edit or a tombstone survives re-seeding — and `reviews` is the stored map, since
+  seeds ship none. `hydrated` starts `false` and the read happens in an `useEffect`, so first paint
+  never waits on storage (§9). `newerVersion` is carried through from `loadState`, giving `T-1.4`'s
+  "surface it" a consumer instead of dead data.
+- **Verify, run as written:** `npx tsc --noEmit` → **exit 0**, and the temporary `console.log` the task
+  asks for was actually run: with a one-off probe wired into `app/index.tsx`,
+  `CI=1 BROWSER=none npx expo start --web` + a real page load captured in the browser console
+  **`T-1.10 merge: 17 cards, 0 reviews, newerVersion = undefined`**, and a **second** load logged the
+  same 17 — no accumulation, no duplicated seed ids. The Metro terminal independently printed the same
+  line on all three loads.
+- **Read-only confirmed:** `window.localStorage` was still **empty** after the loads — this task reads,
+  it does not persist (`T-1.11` owns the write).
+- **Probe removed again:** the `DeckProbe` component and its two imports were added to `app/index.tsx`
+  solely for the measurement and deleted straight after; `git diff --stat app/index.tsx` → **empty**
+  (byte-identical to HEAD), `npx tsc --noEmit` → **exit 0** afterwards.
 - **Blocks:** `T-1.11`, `T-2.2`, `T-2.9`
 
-### [ ] T-1.11 — Add mutations and debounced persist to `src/hooks/useDeck.ts`
+### [x] T-1.11 — Add mutations and debounced persist to `src/hooks/useDeck.ts`
 
 - **Depends on:** `T-1.10`, `T-1.5`
 - **Size:** `M`
@@ -836,10 +966,32 @@ day one, and `normalize.ts` is the single comparison rule the typing mode will u
 - **Done when:** adding a card, reloading and seeing it still there works on web.
 - **Verify:** `npx jest --ci` exits 0 with the new check, and a browser reload on web keeps a manually
   added card.
-- **Evidence:** -
+- **Evidence:** `src/hooks/useDeck.ts` extended with a `Deck` interface and the four actions
+  (`addCard`, `updateCard`, `softDeleteCard`, `setReview`), each a thin dispatch onto the now-exported
+  `deckReducer`. `addCard` sets `isCustom: true` and mints its id through `newId()`, which falls back to
+  `custom-<base36 time>-<random>` when `crypto.randomUUID` is absent rather than throwing mid-save.
+  `softDeleteCard` sets a tombstone and nothing else — `reviews` is untouched, so an un-delete cannot
+  have lost progress. The single write path is an effect calling storage's debounced `saveState`
+  whenever `cards`/`reviews` change, **guarded on `hydrated`** so the un-hydrated empty deck can never
+  overwrite the user's document.
+- **Verify, both halves run for real.** Jest: `npx jest --ci` → **exit 0, 5 suites, 32 tests passed**,
+  including the new `src/hooks/useDeck.test.ts`. Browser: with a temporary probe exposing the deck, a
+  load of `:8081` started at **17 cards**, `addCard` wrote a `localStorage` document with
+  `schemaVersion: 1` and **18 cards**, and after a hard **reload** the deck came back with **18**,
+  including `5b094c4f-… :: T-1.11 probe card`. `npx tsc --noEmit` → **exit 0**.
+- **The crypto fallback was checked, not assumed:** shadowing `crypto.randomUUID` to `undefined`
+  (`typeof` → `undefined`) and adding again did **not** throw, minted `custom-mule1b27-e7r3hl45`, and
+  that card survived a reload too — **19 cards**.
+- **Test-file note:** `src/hooks/useDeck.test.ts` needs the package's AsyncStorage mock even though its
+  cases are pure, because `useDeck` imports `storage`, which imports the native module — without it the
+  suite failed to load (`1 failed` suite, `0` tests from it, `27` from the others). Added the same
+  `jest.mock` its sibling test uses.
+- **Cleanup, so the next check is not polluted:** the probe was removed, `app/index.tsx` is
+  byte-identical to HEAD, and the two probe cards were cleared from that origin's `localStorage`
+  (`length: 0`) — otherwise `T-1.12`'s "17 cards both times" would have read 19.
 - **Blocks:** `T-2.9`, `T-2.10`, `T-4.4`
 
-### [ ] T-1.12 — Phase 1 gate — the data layer is provably sound
+### [x] T-1.12 — Phase 1 gate — the data layer is provably sound
 
 - **Depends on:** `T-1.5`, `T-1.7`, `T-1.9`, `T-1.11`
 - **Size:** `S`
@@ -852,7 +1004,21 @@ day one, and `normalize.ts` is the single comparison rule the typing mode will u
 - **Done when:** the full chain passes and the seed merge is idempotent.
 - **Verify:** `npm run verify` exits 0, **and** loading the web app twice shows 17 cards both times
   (no duplicated seed ids).
-- **Evidence:** -
+- **Evidence:** `npm run verify` → **exit 0** — `tsc --noEmit` clean, `Test Suites: 5 passed, 5 total`,
+  `Tests: 32 passed, 32 total`, `Exported: dist`. Re-run after the temporary probe was removed →
+  **exit 0** again.
+- **App-level idempotence, measured rather than assumed.** The first attempt was against the rebuilt
+  container, and it wrote **no document at all**: no screen renders the deck yet (`T-2.2`/`T-2.9` are its
+  first consumers), so `useDeck` never runs on a bare container load. That is correct for this point in
+  the plan, and it is also why this observation needs a temporary probe — the same technique `T-1.10`'s
+  `Verify` line prescribes. With the probe in place on `:8081`, three loads were read:
+  1. load 1 → **17 cards, 17 unique ids, 17 seeds, 0 non-seed**;
+  2. load 2, with load 1's document in place → **17 cards**, id list byte-identical to load 1;
+  3. load 3, after wiping the stored `cards` map to `{}` as a sentinel → **17 cards** again, so the merge
+     genuinely re-seeds rather than coasting on what was already stored.
+  `unique === cards` on every load: no duplicated seed ids.
+- **Probe removed:** `app/index.tsx` is byte-identical to HEAD, and that origin's `localStorage` was
+  cleared (`length: 0`).
 - **Blocks:** `T-2.2`
 
 ---
@@ -862,7 +1028,7 @@ day one, and `normalize.ts` is the single comparison rule the typing mode will u
 Maps to §6 Step 3 and §4 Phase 1 (features 1–4). The smallest end-to-end path that proves the app
 works: a card that flips, a status that sticks, a filter that shows it.
 
-### [ ] T-2.1 — Create the theme tokens in `src/theme/`
+### [x] T-2.1 — Create the theme tokens in `src/theme/`
 
 - **Depends on:** `T-0.4`
 - **Size:** `M`
@@ -879,7 +1045,35 @@ works: a card that flips, a status that sticks, a filter that shows it.
   colour.
 - **Verify:** `npx tsc --noEmit` exits 0, and on web the computed background of a `bg-background`
   element equals the token value.
-- **Evidence:** -
+- **Evidence:** the token set now lives in `src/theme/`, with both light and dark values, exported as
+  `palette` (named roles: background, surface, text, muted, accent, success, danger, border) plus
+  `MonoFontStack` as §4 Phase 2's per-platform stack.
+- **The one-source constraint, and how it was met.** `tailwind.config.js` runs in Node as CommonJS and
+  therefore **cannot `require` a `.ts` module**, so the palette lives in `src/theme/tokens.js` —
+  Tailwind's own docs prescribe exactly this ("extract them to a file that is shared with your code and
+  your `tailwind.config.js`"). Both `tailwind.config.js` and `src/theme/index.ts` read it, so a value is
+  written down once. `src/theme/tokens.js` is an **extra file, stated explicitly**: it exists only
+  because of that CJS/TS split, and it is the only place a hex literal appears.
+- **Mechanism.** `theme.extend.colors` maps each name to `var(--color-<name>)`, and a `plugins` entry
+  `addBase`s the literals — light on `:root`, dark on `.dark` (the documented "dynamic themes"
+  pattern). `extend` rather than `theme.colors` on purpose, so the stock palette survives and the
+  existing `bg-indigo-600` probe keeps working. `src/global.css` needed **no** change.
+- **Overlap declared, not duplicated.** background/surface/text/muted are the template's existing
+  values from `src/constants/theme.ts`, so nothing repaints when the app is migrated onto these tokens;
+  accent/success/danger/border are the roles the template had no equivalent for. The two vocabularies
+  coexist until `T-5.3` applies the tokens to every screen — that is its scope, not this task's.
+- **Verify, run as written:** `npx tsc --noEmit` → **exit 0**. On web, with a temporary `bg-background`
+  probe, the class computed **`rgb(255, 255, 255)`** = `palette.light.background` (`#ffffff`); after
+  adding `dark` to `<html>` it computed **`rgb(0, 0, 0)`** = `palette.dark.background`. A class and the
+  JS token agree in **both** modes — this task's `Done when`.
+- **A doubt chased down rather than waved away:** the variable read back as `#fff`/`#000` rather than
+  `#ffffff`/`#000000`. Enumerating every stylesheet rule that declares `--color-background` returned
+  exactly two — `:root` and `.dark` — so nothing overrides the tokens and the shortening is Tailwind's
+  own processing. All eight tokens carry their declared values in both modes (`--color-muted`
+  `#60646c`/`#b0b4ba`, `--color-accent` `#4f46e5`/`#818cf8`, …).
+- **Re-checked after the config change:** `npx jest --ci` → **32 passed**; `npm run verify` → **exit 0**
+  with `Exported: dist`, so the new config did not break the export. Probe removed — `app/index.tsx` is
+  byte-identical to HEAD.
 - **Blocks:** `T-2.2`, `T-2.5`, `T-5.3`
 
 ### [ ] T-2.2 — Wire theme and the hydration gate into `app/_layout.tsx`
