@@ -2,19 +2,56 @@
 # Scoped to prompts/ on purpose: .github/workflows/ and templates stay usable.
 .github/prompts/
 
-# Node / Expo
+# Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
+
+# dependencies
 node_modules/
-dist/
-.expo/
+
+# logs
 *.log
 
-# Env files — never commit real values. `.env.example` is tracked on purpose.
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Native
+.kotlin/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Metro
+.metro-health-check*
+
+# debug
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# macOS
+.DS_Store
+*.pem
+
+# local env files — never commit real values. `.env.example` is tracked on purpose.
 .env
 .env.*
+.env*.local
 !.env.example
 
-# Generated Android build output, and signing material that must never be committed
-android/
+# typescript
+*.tsbuildinfo
+
+example
+
+# generated native folders
+/ios
+/android
+
+# built artifacts and signing material that must never be committed
 *.apk
 *.keystore
-*.jks

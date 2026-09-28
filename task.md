@@ -28,17 +28,17 @@ header `Status:` moves `not started` → `in progress` → `complete`.
 
 | Phase | Tasks | Done / Total | Status |
 |---|---|---|---|
-| 0 — Scaffold: two surfaces from minute one | 14 | 0 / 14 | in progress |
+| 0 — Scaffold: two surfaces from minute one | 14 | 1 / 14 | in progress |
 | 1 — Data layer | 12 | 0 / 12 | not started |
 | 2 — Core UI: flip + persist | 12 | 0 / 12 | not started |
 | 3 — Active typing mode | 6 | 0 / 6 | not started |
 | 4 — Card editor, export & import | 11 | 0 / 11 | not started |
 | 5 — Polish & ship | 13 | 0 / 13 | not started |
-| 6 — Native Android delivery: local APK → Drive or USB | 8 | 1 / 8 | in progress |
+| 6 — Native Android delivery: local APK → Drive or USB | 8 | 2 / 8 | in progress |
 | 7 — Verifiable gates | 5 | 0 / 5 | not started |
 | 8 — End-to-end acceptance | 12 | 0 / 12 | not started |
 
-**Overall:** 1 / 93 done
+**Overall:** 3 / 93 done
 
 **Critical path** — nothing downstream can be believed until these pass:
 `T-0.1 → T-0.3 → T-0.4 → T-0.13` (toolchain + web export proven on day one) ·
@@ -140,7 +140,7 @@ Maps to §6 Step 1. The plan is explicit that Docker and a working web export ex
 any feature work — "an app that has never been exported to web discovers its web problems far too
 late".
 
-### [ ] T-0.1 — Scaffold the Expo app with TypeScript and expo-router
+### [x] T-0.1 — Scaffold the Expo app with TypeScript and expo-router
 
 - **Depends on:** none
 - **Size:** `S`
@@ -153,7 +153,28 @@ late".
 - **Files / artifacts:** `package.json`, `app.json`, `tsconfig.json`, `app/_layout.tsx`, `app/index.tsx`, `assets/`
 - **Done when:** the scaffold's own screens run and TypeScript compiles with no errors.
 - **Verify:** `npx tsc --noEmit` exits 0, and `npx expo start --web` on the host serves the default screen.
-- **Evidence:** -
+- **Evidence:** `npx create-expo-app@latest . --template default` (create-expo-app 5.0.0) → **Expo SDK 57**
+  (`expo ~57.0.25`, `expo-router ~57.0.23`, `react-native 0.86.3`, `react 19.2.3`, `typescript ~6.0.3`,
+  607 packages, 39 s). `npx tsc --noEmit` → **exit 0**. `CI=1 BROWSER=none npx expo start --web` →
+  `Waiting on http://localhost:8081`, `Web Bundled 14819ms expo-router/entry.js`; a browser load of
+  `http://localhost:8081/` rendered the default screen — `Welcome to Expo`, expo-router links
+  `Home /` and `Explore /explore`, version badge `v57.0.25` (screenshot taken). Server then stopped.
+- **Finding (directory conflict).** `create-expo-app` **refuses a non-empty directory** — it listed
+  `.github`, `BUILD.md`, `plan.md`, `task.md` and exited 1 without writing anything. Worked around by
+  parking exactly those four entries in `/tmp/syntax-gym-parked` (checksums recorded, `.github` copied),
+  running the command, then restoring: `md5sum -c` → all 7 files `OK`. Scaffolding into a
+  **subdirectory** was rejected deliberately — every task in this file names root-level `app/`, `src/`,
+  `docker/` and `docker-compose.yml` paths.
+- **Note (layout).** The SDK 57 default template scaffolds the router at **`src/app/`**; moved to
+  **`app/`** with `mv src/app app` to match this task's `Files / artifacts` line and plan §1. Imports
+  are unaffected — the template uses tsconfig's `@/* → ./src/*` alias, not relative paths.
+- **Note (regression repaired).** The template **overwrote the existing `.gitignore`**, dropping the
+  entries `T-0.11` had verified — `.env` was left **unignored**. Restored them (keeping the template's
+  additions); re-checked: `.env` ignored, `android/app/build/outputs/apk/release/app-release.apk`
+  ignored, `.env.example` **not** ignored, `.github/workflows/ci.yml` **not** ignored.
+- **Note (must know).** `expo-env.d.ts` is **generated on first `expo start`** and is required by
+  `tsc` — it supplies the `*.module.css` / side-effect-CSS declarations. It is gitignored. A fresh
+  checkout must therefore run `expo start` (or `expo export`) once before `tsc --noEmit` passes.
 - **Blocks:** `T-0.2`, `T-0.3`, `T-0.6`, `T-0.8`, `T-1.1`
 
 ### [ ] T-0.2 — Set `app.json` web output to `single`
@@ -1471,7 +1492,7 @@ exercised. `T-6.7` verifies that document rather than trusting it.
   the later `ca-certificates-java` trigger re-ran and added all certs.
 - **Blocks:** `T-6.3`
 
-### [ ] T-6.2 — Point the toolchain at the existing Android SDK
+### [x] T-6.2 — Point the toolchain at the existing Android SDK
 
 - **Depends on:** none
 - **Size:** `S`
@@ -1487,7 +1508,17 @@ exercised. `T-6.7` verifies that document rather than trusting it.
 - **Done when:** a fresh shell has `ANDROID_HOME` set and `adb` on `PATH`.
 - **Verify:** in a **new** shell, `echo "$ANDROID_HOME"` prints `/home/adminpaws/Android/Sdk` and
   `adb version` prints a version banner.
-- **Evidence:** -
+- **Evidence:** Appended to the end of `~/.bashrc` (after the existing `nvm` block):
+  `export ANDROID_HOME="$HOME/Android/Sdk"` and `export PATH="$PATH:$ANDROID_HOME/platform-tools"`.
+  Verified in a new shell (`bash -ic`): `ANDROID_HOME=/home/adminpaws/Android/Sdk` — the exact
+  expected value, and `adb version` → `Android Debug Bridge version 1.0.41`, `Version 37.0.0-14910828`,
+  `Installed as /home/adminpaws/Android/Sdk/platform-tools/adb`. `~/Android/Sdk/licenses/` confirmed
+  present beforehand, so SDK licence acceptance is genuinely done.
+- **Note:** the block sits **after** the file's non-interactive guard (`case $- in *i*) ;; *) return;; esac`,
+  line 5 — the same convention as the `nvm` block. A new **interactive** terminal therefore has both,
+  but a non-interactive `bash -c '...'` does **not**, because `.bashrc` returns before reaching the
+  end. Gradle still finds the SDK in that case: `expo prebuild` writes `android/local.properties`
+  with `sdk.dir`.
 - **Blocks:** `T-6.3`, `T-6.4`
 
 ### [ ] T-6.3 — Build the first release APK
