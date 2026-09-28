@@ -14,5 +14,6 @@ dist/
 
 # Generated Android build output, and signing material that must never be committed
 android/
+*.apk
 *.keystore
 *.jks
