@@ -1,5 +1,6 @@
-# Local VS Code / Copilot prompt and rule files — this machine only, never published
-.github/
+# Local VS Code / Copilot prompt files — this machine only, never published.
+# Scoped to prompts/ on purpose: .github/workflows/ and templates stay usable.
+.github/prompts/
 
 # Node / Expo
 node_modules/

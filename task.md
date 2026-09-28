@@ -339,13 +339,16 @@ late".
   shows the build context excludes `node_modules`.
 - **Evidence:** `[~]` — `.gitignore` created and pushed (commit `8e769a8`). Covers `node_modules/`,
   `dist/`, `.expo/`, `*.log`, `.env` + `.env.*` with `!.env.example`, `android/`, `*.apk`,
-  `*.keystore`, `*.jks`, plus `.github/` at the user's request. Verified with `git check-ignore -q`:
+  `*.keystore`, `*.jks`, plus `.github/prompts/` at the user's request. Verified with `git check-ignore -q`:
   IGNORED for `android/`, `android/app/build/outputs/apk/release/app-release.apk` and
   `app-release.apk`. GitHub's contents API returns **404** for `.github` — proof it is unpublished,
   not merely listed in a `.gitignore`. **Still missing: `.dockerignore`**, so the task stays open.
 - **Note:** `git check-ignore android` (bare name, no trailing slash) does **not** match an
   `android/` directory-only pattern, because git cannot tell the path is a directory. Check a real
   path *under* it instead — the tree itself is genuinely ignored.
+- **Note:** The prompt files are ignored as `.github/prompts/`, **not** all of `.github/`, so a
+  GitHub Actions workflow can still be added at `.github/workflows/` without `git add -f`. Confirm
+  with `git check-ignore -q .github/workflows/ci.yml` → must report **NOT** ignored.
 - **Blocks:** `T-0.13`
 
 ### [ ] T-0.12 — Add `.env.example` documenting `HOST_IP`
